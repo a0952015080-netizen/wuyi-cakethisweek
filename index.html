@@ -39,6 +39,11 @@ input, select, textarea {
   <!-- 頂部橫幅圖片 -->
   <div class="relative rounded-2xl overflow-hidden shadow-sm border border-stone-300 bg-white group select-none">
     <img id="headerCakeImg" src="./header.jpg" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800&auto=format&fit=crop&q=80';" alt="Wuyi Cake 當週公版蛋糕訂購" class="w-full h-32 sm:h-44 object-cover cursor-pointer active:opacity-95 transition" />
+    <!-- ☁️ 試算表檢查連線 按鈕 -->
+    <button type="button" id="headerCloudBtn" onclick="manualCheckCloudConnection(event)" class="absolute top-2 right-2 bg-black/60 hover:bg-black/80 backdrop-blur-sm text-white text-[11px] font-medium px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1.5 transition active:scale-95 z-10 cursor-pointer">
+      <span id="headerCloudDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+      <span id="headerCloudText">☁️ 試算表檢查連線</span>
+    </button>
   </div>
 
   <!-- 主表單容器 -->
@@ -1085,9 +1090,66 @@ function saveCustomGasApi() {
   }
 }
 
+// 頂圖手動點擊「☁️ 試算表檢查連線」
+async function manualCheckCloudConnection(e) {
+  if (e) e.stopPropagation();
+  const dot = document.getElementById("headerCloudDot");
+  const text = document.getElementById("headerCloudText");
+
+  if (text) text.innerText = "連線檢查中...";
+  if (dot) dot.className = "w-2 h-2 rounded-full bg-amber-400 animate-ping";
+
+  const startTime = Date.now();
+  try {
+    const res = await fetch(`${GAS_CALENDAR_API}?category=${encodeURIComponent(CALENDAR_CATEGORY)}&t=${Date.now()}`, { method: "GET" });
+    const elapsed = Date.now() - startTime;
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const json = await res.json();
+    if (json && (json.status === "success" || json.data || json[CALENDAR_CATEGORY])) {
+      let data = json.data || json;
+      if (data && data[CALENDAR_CATEGORY]) data = data[CALENDAR_CATEGORY];
+      if (typeof data.disableMonday === "boolean") {
+        disableMondaySetting = data.disableMonday;
+        if (settingDisableMonday) settingDisableMonday.checked = disableMondaySetting;
+        localStorage.setItem(STORAGE_KEY_DISABLE_MONDAY, JSON.stringify(disableMondaySetting));
+      }
+      if (data.calendarDateStatus && typeof data.calendarDateStatus === "object") {
+        for (const k in data.calendarDateStatus) calendarDateStatus[k] = normalizeStatus(data.calendarDateStatus[k]);
+      }
+      localStorage.setItem(STORAGE_KEY_DATE_STATUS, JSON.stringify(calendarDateStatus));
+      initFlatpickrCalendar();
+      if (!adminStepPanel.classList.contains("hidden")) {
+        renderAdminCalendar();
+      }
+
+      if (dot) dot.className = "w-2 h-2 rounded-full bg-emerald-400";
+      if (text) text.innerText = "☁️ 試算表已連線";
+      if (cloudSyncStatus) {
+        cloudSyncStatus.innerHTML = `☁️ Google 試算表已連線 (${CALENDAR_CATEGORY})`;
+        cloudSyncStatus.className = "text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-medium flex items-center";
+      }
+
+      alert(`✅ Google 試算表連線正常！\n\n・分頁類別：${CALENDAR_CATEGORY}\n・連線耗時：${elapsed} 毫秒 (ms)\n・日曆狀態：已同步最新預訂與店休設定！`);
+    } else {
+      throw new Error("回傳格式不正確");
+    }
+  } catch (err) {
+    if (dot) dot.className = "w-2 h-2 rounded-full bg-rose-500";
+    if (text) text.innerText = "⚠️ 試算表連線異常";
+    if (cloudSyncStatus) {
+      cloudSyncStatus.innerHTML = `☁️ 使用本機快取 (離線 ${CALENDAR_CATEGORY})`;
+      cloudSyncStatus.className = "text-[10px] bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full font-medium flex items-center";
+    }
+    alert(`⚠️ 試算表連線檢查失敗：\n${err.message || err}\n\n目前表單將先使用本機快取設定。請確認 GAS 網址與權限設定為「所有人 (Anyone)」。`);
+  }
+}
+
 // 從雲端 Google 試算表讀取 cakethisweek_calander 設定
 async function loadCalendarFromGAS() {
+  const headerDot = document.getElementById("headerCloudDot");
+  const headerText = document.getElementById("headerCloudText");
   try {
+    if (headerDot) headerDot.className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
     if (cloudSyncStatus) {
       cloudSyncStatus.innerHTML = '<span class="animate-spin inline-block mr-1">🔄</span>同步中...';
       cloudSyncStatus.className = "text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium flex items-center";
@@ -1111,6 +1173,8 @@ async function loadCalendarFromGAS() {
         cloudSyncStatus.innerHTML = `☁️ Google 試算表已連線 (${CALENDAR_CATEGORY})`;
         cloudSyncStatus.className = "text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-medium flex items-center";
       }
+      if (headerDot) headerDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+      if (headerText) headerText.innerText = "☁️ 試算表已連線";
       initFlatpickrCalendar();
       if (!adminStepPanel.classList.contains("hidden")) {
         renderAdminCalendar();
@@ -1121,6 +1185,8 @@ async function loadCalendarFromGAS() {
       cloudSyncStatus.innerHTML = `☁️ 使用本機快取 (離線 ${CALENDAR_CATEGORY})`;
       cloudSyncStatus.className = "text-[10px] bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full font-medium flex items-center";
     }
+    if (headerDot) headerDot.className = "w-2 h-2 rounded-full bg-rose-500";
+    if (headerText) headerText.innerText = "☁️ 試算表檢查連線";
   }
 }
 
