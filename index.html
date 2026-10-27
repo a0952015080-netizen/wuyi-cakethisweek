@@ -409,7 +409,7 @@ input, select, textarea {
 // ==================== 1. 安全預設設定（若無 config.js 亦能完美運行） ====================
 const DEFAULT_CONFIG = {
   lineOaId: "@949kmnau",
-  gasApi: "https://script.google.com/macros/s/AKfycbz_YOUR_DEPLOYED_ID/exec",
+  gasApi: "https://script.google.com/macros/s/AKfycbzVxDkFO8UDZHUZYhiwGSFsTU4v6Ilbp0mgLXHEiXtDYYv_9p3epdF_y1IoWwSalqVx/exec",
   booking: {
     pickupAddress: "台南市中西區友愛街93號",
     pickupTimeRange: "15:00 - 19:00",
@@ -443,7 +443,7 @@ const STORAGE_KEY_DATE_STATUS = "wuyi_cakethisweek_date_status_v1";
 const STORAGE_KEY_DISABLE_MONDAY = "wuyi_cakethisweek_disable_monday_v1";
 const STORAGE_KEY_GAS_API = "wuyi_gas_api_url";
 
-let GAS_CALENDAR_API = localStorage.getItem(STORAGE_KEY_GAS_API) || (ACTIVE_CONFIG.gasApi || "https://script.google.com/macros/s/AKfycbz_YOUR_DEPLOYED_ID/exec");
+let GAS_CALENDAR_API = localStorage.getItem(STORAGE_KEY_GAS_API) || (ACTIVE_CONFIG.gasApi || "https://script.google.com/macros/s/AKfycbzVxDkFO8UDZHUZYhiwGSFsTU4v6Ilbp0mgLXHEiXtDYYv_9p3epdF_y1IoWwSalqVx/exec");
 
 let calendarDateStatus = {};
 let disableMondaySetting = true;
