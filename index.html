@@ -1239,34 +1239,39 @@ function saveAdminConfigLocalOnly() {
 }
 
 // ==================== 5. 方案三核心：透過 GitHub API 自動更新 schedule.json ====================
-async function pushScheduleFile(token, repo, branch, contentObj) {
-  const filePath = "schedule.json";
-  const getUrl = `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`;
-  let currentSha = null;
-
+async function getFreshRepoSha(token, repo, filePath, branch) {
+  const getUrl = `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}&_t=${Date.now()}`;
   const getRes = await fetch(getUrl, {
+    cache: "no-store",
     headers: {
       "Authorization": `Bearer ${token}`,
-      "Accept": "application/vnd.github.v3+json"
+      "Accept": "application/vnd.github.v3+json",
+      "Cache-Control": "no-cache"
     }
   });
 
   if (getRes.ok) {
     const fileData = await getRes.json();
-    currentSha = fileData.sha;
+    return fileData.sha;
   } else if (getRes.status === 401) {
     throw new Error(`Token 無效或過期，無法存取 ${repo}`);
   } else if (getRes.status === 403) {
     throw new Error(`權限不足，無法寫入 ${repo}，請確認 Token 具備 repo 寫入權限！`);
   } else if (getRes.status === 404) {
-    currentSha = null; // 檔案尚不存在，直接建立
+    return null; // 檔案尚不存在，直接建立
   }
+  return null;
+}
+
+async function pushScheduleFile(token, repo, branch, contentObj) {
+  const filePath = "schedule.json";
+  let currentSha = await getFreshRepoSha(token, repo, filePath, branch);
 
   const jsonContent = JSON.stringify(contentObj, null, 2);
   const base64Content = btoa(unescape(encodeURIComponent(jsonContent)));
 
   const putUrl = `https://api.github.com/repos/${repo}/contents/${filePath}`;
-  const putBody = {
+  let putBody = {
     message: `update: 店長更新訂購日期開關 (${new Date().toLocaleDateString('zh-TW')} ${new Date().toLocaleTimeString('zh-TW')})`,
     content: base64Content,
     branch: branch
@@ -1275,7 +1280,7 @@ async function pushScheduleFile(token, repo, branch, contentObj) {
     putBody.sha = currentSha;
   }
 
-  const putRes = await fetch(putUrl, {
+  let putRes = await fetch(putUrl, {
     method: "PUT",
     headers: {
       "Authorization": `Bearer ${token}`,
@@ -1284,6 +1289,26 @@ async function pushScheduleFile(token, repo, branch, contentObj) {
     },
     body: JSON.stringify(putBody)
   });
+
+  // 防呆：若遇到 SHA 不符 (409 Conflict)，立即自動獲取最新 SHA 重試一次
+  if (putRes.status === 409) {
+    console.warn(`${repo} 遇到 SHA 快取衝突 (409)，立即重新獲取最新 SHA 重試...`);
+    currentSha = await getFreshRepoSha(token, repo, filePath, branch);
+    if (currentSha) {
+      putBody.sha = currentSha;
+    } else {
+      delete putBody.sha;
+    }
+    putRes = await fetch(putUrl, {
+      method: "PUT",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/vnd.github.v3+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(putBody)
+    });
+  }
 
   if (!putRes.ok) {
     const errData = await putRes.json().catch(() => ({}));
